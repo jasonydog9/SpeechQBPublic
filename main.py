@@ -6,7 +6,7 @@ import re
 import discord
 import requests
 from discord import FFmpegPCMAudio, Permissions
-from helpers import get_question, check, get_audio, get_bonus
+from helpers import get_question, check, get_audio
 from discord.ext import commands
 
 FFMPEG_OPTIONS = {'options': '-vn'}
@@ -346,9 +346,6 @@ async def on_message(message):
         embed.add_field(name="-end",
                         value="Once in the game and you wish to end, type -end",
                         inline=False)
-        embed.add_field(name='-bonus',
-                        value="type -bonus [cats] [diffs] to play bonuses",
-                        inline=False)
         embed.add_field(name="-score",
                         value="Gives the scores of every person who has buzzed in",
                         inline=False)
@@ -356,24 +353,5 @@ async def on_message(message):
                         value="Version 0.2.0",
                         inline=False)
         await message.channel.send(embed=embed)
-
-    if message.content == '-vikram':
-        embed = discord.Embed(title="Veeekram", color=0x3776AB)
-        embed.set_image(
-            url='https://cdn.discordapp.com/attachments/1029560549903700099/1166187556405252218/IMG_2491.jpg?ex=654993cc&is=65371ecc&hm=9b3f28fb13d33c5f52af344a0ab980c3684843f8207d477fa61d3eef5e4895f2&')
-        await message.channel.send(embed=embed)
-    if message.content == '-jackie':
-        await message.channel.send('Government Coup!!!!')
-    if message.content == '-akshath':
-        embed = discord.Embed(title="dyuude", color=0x3776AB)
-        embed.set_image(
-            url=(
-                'https://cdn.discordapp.com/attachments/1029560549903700099/1170171115574923264/image.png?ex=655811c6&is=65459cc6&hm=71eb7cbfc3f11a2a1e3b55a241ebe0d7f9e1aac891be95d5bb7550c36c6d76e2&'))
-        await message.channel.send(embed=embed)
-    if message.content == '-jason':
-        await message.channel.send('where were you during the taiping rebellion')
-    if message.content == '-varma':
-        await message.channel.send('I am adult medium 😠')
-
 
 client.run(TOKEN)
