@@ -5,7 +5,7 @@ import os
 
 from google.cloud import texttospeech_v1
 
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'infra-hulling-388220-c8bbed4a70df.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'INSERT YOUR GOOGLE TTS APPLICATION CREDENTIALS HERE'
 def get_audio(question):
     num = random.randint(0, 10000)
     client = texttospeech_v1.TextToSpeechClient()
