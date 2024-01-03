@@ -16,7 +16,7 @@ questions = {}
 list = []
 new = {}
 
-TOKEN = 'MTEwNDIyOTc0OTk2ODA4OTEwOA.GRp7KR.YFHle0fHoqd4Rft1C3KKNI-q-GdUoatGCwNGzA'
+TOKEN = 'INSERT YOUR DISCORD BOT TOKEN HERE'
 client = discord.Client(intents=discord.Intents.all())
 
 
@@ -87,61 +87,6 @@ async def on_message(message):
     async def remove_audio(list):
         for i in list:
             os.remove(i)
-
-    async def bonus(categories, difficulties, voice, channel, player):
-        audioList = []
-        user = Player(player.name, player.id)
-        questionFin = False
-        while True:
-            partNum = 0
-            bonus = get_bonus(categories, difficulties)
-            leadIn = bonus[0]['leadin']
-            leadAudio = await play_audio(leadIn, voice)
-            audioList.append(leadAudio)
-            while (partNum > 3):
-                while voice.is_playing(): #waits until first part is done reading
-                    continue
-                bonusPart = bonus[0]['parts'][partNum]
-                answerPart = bonus[0]['answers'][partNum]
-                audio_name = await play_audio(bonusPart, voice)
-                audioList.append(audio_name)
-
-                answer = await bonus_answer(answerPart, player, channel)
-                voice.stop()
-                if (answer == 'reread'):
-                    break
-                if (answer == 'accept'):
-                    user.increasePoints()
-                if (answer == 'reject'):
-                    continue
-                while not questionFin:
-
-
-
-
-
-
-                partNum += 1
-
-    async def bonus_answer(answerLine, player, channel):
-        while True:
-            try:
-                answer = await client.wait_for('message', timeout=180.0)
-                if answer.author != player or answer.channel != channel:
-                    break
-                if answer.content.startswith('_'):
-                    break
-                if answer.content == '-reread':
-                    return 'reread'
-                if check(answerLine, answer.content)['directive'] == 'accept' or check(answerLine, answer.content)['directive'] == 'prompt':
-                    return 'accept'
-                elif check(answerLine, answer.content)['directive'] == 'reject':
-                    return 'reject'
-            except asyncio.TimeoutError:
-                return 'reject'
-
-
-
 
     async def play(catList, diffList, voice, channel, msgChannel, buzzQ):
         audioList = []
@@ -385,60 +330,6 @@ async def on_message(message):
         channels[message.channel.id] = channel
         buzzQ = []
         await play(catList, diffList, voice_clients[voice.guild.id], channel, channels[message.channel.id], buzzQ)
-
-    if message.content.startswith('-bonus'):
-        subs = {
-            "Literature": "lit",
-            "Science": "sci",
-            "History": "hist",
-            "Fine Arts": "fa",
-            "Religion": "religion",
-            "Mythology": "myth",
-            "Philosophy": "philo",
-            "Social Science": "ss",
-            "Current Events": "ce",
-            "Geography": "geo",
-            "Trash": "trash"
-        }
-
-        catList = message.content.split()
-        catList.remove('-bonus')
-        diffList = []
-        for i in catList:
-            if i.isdigit() and 10 > int(i) > 0:
-                diffList.append(i)
-                catList.remove(i)
-            elif i.isdigit():
-                await message.channel.send("Enter a correct difficulty")
-                return
-
-        def get_key(val):
-
-            for key, value in subs.items():
-                if val == value:
-                    return key
-
-            return "key doesn't exist"
-
-        for i in catList:
-            if i in subs.values() and get_key(i) != "key doesn't exist":
-                catList[catList.index(i)] = get_key(i)
-            else:
-                catList.remove(i)  # removes element that is not in subs, could return idk in futur
-
-        channel = message.author.voice
-        if channel is None:
-            await message.channel.send('must be in voice channel')
-            return
-
-        voice = await channel.channel.connect()
-        voice_clients[voice.guild.id] = voice
-        channel = message.channel
-        channels[message.channel.id] = channel
-        player = message.author
-        await bonus(catList, diffList, voice_clients[voice.guild.id], channels[message.channel.id], player)
-
-
 
     if message.content == '-help':
         embed = discord.Embed(title="SpeechQB Help", color=0x3776AB)
