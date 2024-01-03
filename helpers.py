@@ -54,24 +54,6 @@ def get_question(catList, diffList):
     else:
         raise Exception(str(response.status_code) + " bad request")
 
-def get_bonus(catList, diffList):
-    url = "https://www.qbreader.org/api" + "/random-bonus"
-    subcats = []
-    res = [eval(i) for i in diffList]
-    data = {
-        "categories": catList,
-        "subcategories": subcats,
-        "difficulties": res,
-        "number": 1,
-        "minYear": 2014
-    }
-
-    response  = requests.get(url, params=data)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception(str(response.status_code) + " bad request")
-
 
 def check(question, answer):
     return confirm(question, answer)
