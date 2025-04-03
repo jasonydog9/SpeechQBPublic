@@ -19,6 +19,7 @@ active_channels = {}
 player_lists = {}
 end_list = {}
 skip_list = {}
+clear_list = {}
 
 TOKEN = 'INSERT YOUR TOKEN HERE'
 client = discord.Client(intents=discord.Intents.all())
@@ -77,7 +78,7 @@ def player_in_list(id, list):
 @client.event
 async def on_ready():
     print(f'{client.user} is running')
-    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='-help'))
+    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='=help'))
 
 
 @client.event
@@ -109,6 +110,16 @@ async def on_message(message):
         skip_list[message.channel.id].append('skip')
     if message.content.lower() == "=end" and message.channel.id in active_channels:
         end_list[message.channel.id].append('end')
+    if message.content.lower() == '=clear' and message.channel.id in active_channels:
+        clear_list[message.channel.id].append('clear')
+        del active_channels[message.channel.id]
+        del player_lists[message.channel.id]
+        del skip_list[message.channel.id]
+        del end_list[message.channel.id]
+        del clear_list[message.channel.id]
+        embed = discord.Embed(title="Session Cleared!", color=0x00FF00)
+        await message.channel.send(embed=embed)
+
 
     async def update_question(q):
         q = re.sub("\(.*?\)|\[.*?\]", "", q)
@@ -161,8 +172,8 @@ async def on_message(message):
         while True:
             time = 20
             newQues = get_question(catList, diffList)
-            question = newQues['tossups'][0]['question']
-            embed = discord.Embed(title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['setName'],
+            question = newQues['tossups'][0]['question_sanitized']
+            embed = discord.Embed(title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['set']['name'],
                                   description="",
                                   color=0x0000FF)
             msg = await channel.send(embed=embed)
@@ -179,10 +190,10 @@ async def on_message(message):
                     for i in range(6):
                         q += words[0] + " "
                         del words[0]
-                new_embed = discord.Embed(title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['setName'],
+                new_embed = discord.Embed(title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['set']['name'],
                                           description=q, color=0x0000FF)
                 if time < 0:
-                    dead = discord.Embed(title="Tossup dead", description = 'Answer: ' + newQues['tossups'][0]['answer'], color=0xFF0000)
+                    dead = discord.Embed(title="Tossup dead", description = 'Answer: ' + newQues['tossups'][0]['answer_sanitized'], color=0xFF0000)
                     await channel.send(embed = dead)
                     questionFin = True
                     bembed = discord.Embed(title="Do you want to continue? Answer Y/N", color=0x0000FF)
@@ -195,7 +206,7 @@ async def on_message(message):
                     if len(words) == 0:
                         time -= 0.1
                     while len(buzzQ) > 0:
-                        answer = await ts_answer(newQues['tossups'][0]['answer'], buzzQ[0], channel, words)
+                        answer = await ts_answer(newQues['tossups'][0]['answer_sanitized'], buzzQ[0], channel, words)
                         if (answer == 'accept'):
                             increase(player_list, buzzQ[0], words)
                             buzzQ.clear()
@@ -223,15 +234,15 @@ async def on_message(message):
                         end_list[channel.id].clear()
                         buzzQ.clear()
                         embed = discord.Embed(title='Tossup skipped.',
-                                              description='Answer: ' + newQues['tossups'][0]['answer'], color=0xFF0000)
+                                              description='Answer: ' + newQues['tossups'][0]['answer_sanitized'], color=0xFF0000)
                         await channel.send(embed=embed)
                         questionFin = True
                         bembed = discord.Embed(title="Do you want to continue? Answer Y/N", color=0x0000FF)
                         await channel.send(embed=bembed)
                         break
-                    while len(end_list[channel.id]) > 0:
+                    while len(end_list[channel.id]) > 0 or len(clear_list[channel.id]) > 0:
                         new_embed = discord.Embed(
-                            title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['setName'],
+                            title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['set']['name'],
                             description=finish_question(words, q),
                             color=0x0000FF)
                         await msg.edit(embed=new_embed)
@@ -259,13 +270,13 @@ async def on_message(message):
                         del player_lists[channel.id]
                         del skip_list[channel.id]
                         del end_list[channel.id]
+                        del clear_list[channel.id]
                         return
-                        
                     if questionFin:
                         break
             while questionFin:
                 new_embed = discord.Embed(
-                    title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['setName'],
+                    title='Tossup ' + str(quesCount) + ' - ' + newQues['tossups'][0]['set']['name'],
                     description=finish_question(words, q),
                     color=0x0000FF)
                 await msg.edit(embed=new_embed)
@@ -362,6 +373,104 @@ async def on_message(message):
             except asyncio.TimeoutError:
                 return 'reject'
 
+    async def bonus(categories, difficulties, channel, player):
+        user = Player(player.name, player.id)
+        questionFin = False
+        bonusNum = 0
+        while True:
+            partNum = 0
+            bonus = get_bonus(categories, difficulties)['bonuses'][0]
+            leadIn = bonus['leadin_sanitized']
+            leadInEmbed = discord.Embed(title=bonus["set"]["name"], description=leadIn, color=0x00FF00)
+            leadInEmbed.set_author(name="For " + player.name)
+            await channel.send(embed=leadInEmbed)
+            while (partNum < 3):
+                bonusPart = bonus['parts_sanitized'][partNum]
+                answerPart = bonus['answers_sanitized'][partNum]
+                bonusEmbed = discord.Embed(title="Part " + str(partNum + 1), description = bonusPart, color =0x0000FF)
+                await channel.send(embed=bonusEmbed)
+                answer = await bonus_answer(answerPart, player, channel)
+                if (answer == 'accept'):
+                    correctEmbed = discord.Embed(title="Correct", description=answerPart, color = 0x0000FF)
+                    correctEmbed.set_author(name=player.name)
+                    await channel.send(embed=correctEmbed)
+                    user.increasePoints()
+                if (answer == 'reject'):
+                    incorrectEmbed = discord.Embed(title="Were you correct? [y/n]", description=answerPart, color=0xFF0000)
+                    incorrectEmbed.set_author(name=player.name)
+                    await channel.send(embed=incorrectEmbed)
+                    while True:
+                        try:
+                            ans = await client.wait_for('message', timeout=3600)
+                            if ans.channel != channel or player != ans.author:
+                                continue
+                            if ans.content.lower() == "y" or ans.content.lower() == "n":
+                                if ans.content.lower() == "y":
+                                    user.increasePoints()
+                                break
+
+                        except asyncio.TimeoutError:
+                            ppb = 0
+                            if categories == []:
+                                categories = "All"
+                            if bonusNum == 0:
+                                ppb = "N/A"
+                            else:
+                                ppb = user.get_points() / bonusNum
+                            scoresEmbed = discord.Embed(title="Stats", description="requested by " + player.name, color=0xFF0000)
+                            scoresEmbed.add_field(name="Categories", value=categories)
+                            scoresEmbed.add_field(name="Bonuses", value=bonusNum)
+                            scoresEmbed.add_field(name="Points", value=user.get_points())
+                            scoresEmbed.add_field(name="PPB", value=ppb)
+                            await channel.send(embed=scoresEmbed)
+                            del active_channels[channel.id]
+                            return
+                if answer == "end":
+                    ppb = 0
+                    if categories == []:
+                        categories = "All"
+                    if bonusNum == 0:
+                        ppb = "N/A"
+                    else:
+                        ppb = user.get_points() / bonusNum
+                    if len(difficulties) == 0:
+                        difficulties = "All"
+                    scoresEmbed = discord.Embed(title="Stats", description="requested by " + player.name, color=0xFF0000)
+                    scoresEmbed.add_field(name="Categories", value = categories)
+                    scoresEmbed.add_field(name="Difficulties", value = difficulties)
+                    scoresEmbed.add_field(name="Bonuses", value=bonusNum)
+                    scoresEmbed.add_field(name="Points", value=user.get_points())
+                    scoresEmbed.add_field(name="PPB", value=ppb)
+                    await channel.send(embed=scoresEmbed)
+                    del active_channels[channel.id]
+                    return
+                if answer == "skip":
+                    break
+                if not questionFin:
+                    partNum += 1
+            bonusNum += 1
+
+    async def bonus_answer(answerLine, player, channel):
+        while True:
+            try:
+                answer = await client.wait_for('message', timeout=3600)
+                if answer.author != player or answer.channel != channel:
+                    continue
+                if answer.content.startswith('_'):
+                    continue
+                if answer.content == "=end":
+                    return "end"
+                if answer.content == "=skip":
+                    return "skip"
+                if check(answerLine, answer.content)['directive'] == 'accept' or check(answerLine, answer.content)[
+                    'directive'] == 'prompt':
+                    return 'accept'
+                elif check(answerLine, answer.content)['directive'] == 'reject':
+                    return 'reject'
+            except asyncio.TimeoutError:
+                return 'reject'
+
+
     async def play(catList, diffList, voice, channel, msgChannel, buzzQ):
         audioList = []
 
@@ -370,7 +479,7 @@ async def on_message(message):
             newQues = get_question(catList, diffList)
             questions[msgChannel] = newQues
             wholeQues = questions[msgChannel]
-            question = wholeQues['tossups'][0]['question']
+            question = wholeQues['tossups'][0]['question_sanitized']
             if not questionFin:
                 newQuestion = await update_question(question)
                 new[msgChannel] = newQuestion
@@ -427,15 +536,15 @@ async def on_message(message):
                         voice.pause()
                         while (len(buzzQ) > 0):
                             voice.pause()
-                            answer = await get_answer(wholeQues['tossups'][0]['answer'], question, buzzQ[0], msgChannel,
-                                                      wholeQues['tossups'][0]['setName'], buzzQ)
+                            answer = await get_answer(wholeQues['tossups'][0]['answer_sanitized'], question, buzzQ[0], msgChannel,
+                                                      wholeQues['tossups'][0]['set']['name'], buzzQ)
                             if answer == 1:
                                 voice.stop()
                                 questionFin = True
                                 await channel.send("Y to continue, N to stop")
                                 break
 
-                            if answer == '-end':
+                            if answer == '=end':
                                 await channel.send("Finished")
                                 scores = discord.Embed(title="SCORES", color=0xFFBF00)
                                 for i in playerList:
@@ -453,22 +562,22 @@ async def on_message(message):
                             if answer == 'prompt':
                                 voice.pause()
                                 continue
-                            if answer == '-score':
+                            if answer == '=score':
                                 scores = discord.Embed(title="SCORES", color=0xFFBF00)
                                 for i in playerList:
                                     scores.add_field(name=i.get_name(), value=i.get_points())
                                 await channel.send(embed=scores)
-                            if answer == '-skip' or answer == '-next':
+                            if answer == '=skip' or answer == '=next':
                                 voice.stop()
-                                embed = discord.Embed(title=wholeQues['tossups'][0]['setName'], description=question,
+                                embed = discord.Embed(title=wholeQues['tossups'][0]['set']['name'], description=question,
                                                       color=0x00FF00)
-                                embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer'])
+                                embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer_sanitized'])
                                 await channel.send(embed=embed)
                                 buzzQ.clear()
                                 questionFin = True
                                 await channel.send("Y to continue, N to stop")
                                 break
-                    elif buzz.content == '-end':
+                    elif buzz.content == '=end':
                         await channel.send("Finished")
                         scores = discord.Embed(title="SCORES", color=0xFFBF00)
                         for i in playerList:
@@ -481,17 +590,17 @@ async def on_message(message):
                         await remove_audio(audioList)
                         del active_channels[channel.id]
                         return
-                    elif buzz.content == '-skip' or buzz.content == '-next':
+                    elif buzz.content == '=skip' or buzz.content == '=next':
                         voice.stop()
-                        embed = discord.Embed(title=wholeQues['tossups'][0]['setName'], description=question,
+                        embed = discord.Embed(title=wholeQues['tossups'][0]['set']['name'], description=question,
                                               color=0x00FF00)
-                        embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer'])
+                        embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer_sanitized'])
                         await channel.send(embed=embed)
                         buzzQ.clear()
                         questionFin = True
                         await channel.send("Y to continue, N to stop")
                         break
-                    elif buzz.content == '-score':
+                    elif buzz.content == '=score':
                         scores = discord.Embed(title="SCORES", color=0xFFBF00)
                         for i in playerList:
                             scores.add_field(name=i.get_name(), value=i.get_points())
@@ -499,9 +608,9 @@ async def on_message(message):
                     voice.resume()
                 except asyncio.TimeoutError:
                     voice.stop()
-                    embed = discord.Embed(title=wholeQues['tossups'][0]['setName'], description=question,
+                    embed = discord.Embed(title=wholeQues['tossups'][0]['set']['name'], description=question,
                                           color=0x00FF00)
-                    embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer'])
+                    embed.add_field(name='Answer', value=wholeQues['tossups'][0]['answer_sanitized'])
                     await channel.send(embed=embed)
                     await channel.send("Ran out of time")
                     questionFin = True
@@ -520,17 +629,17 @@ async def on_message(message):
                     continue
                 if answer.content.startswith("_"):
                     break
-                if (answer.content == '-skip' or answer.content == '-next'):
-                    return '-skip'
-                if (answer.content == '-score'):
-                    return '-score'
+                if (answer.content == '=skip' or answer.content == '=next'):
+                    return '=skip'
+                if (answer.content == '=score'):
+                    return '=score'
                 if (answer.content == 'wd' or answer.content == 'Wd' or answer.content == 'WD'):
                     embed = discord.Embed(title="Withdrew", color=0x738ADB)
                     await channel.send(embed=embed)
                     return 0
-                if answer.content == '-end':
+                if answer.content == '=end':
                     buzzQ.clear()
-                    return '-end'
+                    return '=end'
                 if check(a, answer.content)['directive'] == 'accept':
                     await channel.send("Correct!")
                     for i in playerList:
@@ -555,7 +664,7 @@ async def on_message(message):
                 buzzQ.remove(user)
                 return 0
 
-    if message.content.startswith('-play'):
+    if message.content.startswith('=play'):
         subs = {
             "Literature": "lit",
             "Science": "sci",
@@ -567,11 +676,55 @@ async def on_message(message):
             "Social Science": "ss",
             "Current Events": "ce",
             "Geography": "geo",
-            "Trash": "trash"
+            "Trash": "trash",
+            "American Literature": "amlit",
+            "British Literature": "britlit",
+            "Classical Literature": "classicallit",
+            "European Literature": "eurolit",
+            "World Literature": "worldlit",
+            "Other Literature": "otherlit",
+            "American History": "amhist",
+            "Ancient History": "ancienthist",
+            "European History": "eurohist",
+            "World History": "worldhist",
+            "Other History": "otherhist",
+            "Biology": "bio",
+            "Chemistry": "chem",
+            "Physics": "phys",
+            "Other Science": "osci",
+            "Visual Fine Arts": "vfa",
+            "Auditory Fine Arts": "afa",
+            "Other Fine Arts": "ofa",
+            "Drama": "drama",
+            "Long Fiction": "longfiction",
+            "Poetry": "poetry",
+            "Short Fiction": "shortfiction",
+            "Misc Literature": "misclit",
+            "Math": "math",
+            "Astronomy": "astronomy",
+            "Computer Science": "cs",
+            "Earth Science": "earthscience",
+            "Engineering": "eng",
+            "Misc Science": "miscsci",
+            "Architecture": "architecture",
+            "Dance": "dance",
+            "Film": "film",
+            "Jazz": "jazz",
+            "Opera": "opera",
+            "Photography": "photography",
+            "Misc Arts": "miscarts",
+            "Anthropology": "anthropology",
+            "Economics": "economics",
+            "Linguistics": "linguistics",
+            "Psychology": "psych",
+            "Sociology": "sociology",
+            "Other Social Science": "otherss"
         }
 
-        catList = message.content.split()
-        catList.remove('-play')
+        catList = message.content
+        catList = catList.replace(',', '')
+        catList = catList.split();
+        catList.remove('=play')
         diffList = []
         newCatList = []
         for i in catList:
@@ -596,7 +749,8 @@ async def on_message(message):
             if i in subs.values() and get_key(i) != "key doesn't exist":
                 catList[catList.index(i)] = get_key(i)
             else:
-                catList.remove(i)  # removes element that is not in subs, could return idk in futur
+                await message.channel.send("Enter Correct Categories")
+                return  # removes element that is not in subs, could return idk in futur
 
         v_channel = message.author.voice
         channel = message.channel
@@ -617,7 +771,7 @@ async def on_message(message):
             await play(catList, diffList, voice_clients[voice.guild.id], channel, channels[message.channel.id], buzzQ)
 
     if message.content.startswith('=ts'):
-        subs = {
+        cats = {
             "Literature": "lit",
             "Science": "sci",
             "History": "hist",
@@ -628,10 +782,53 @@ async def on_message(message):
             "Social Science": "ss",
             "Current Events": "ce",
             "Geography": "geo",
-            "Trash": "trash"
+            "Trash": "trash",
+            "American Literature": "amlit",
+            "British Literature": "britlit",
+            "Classical Literature": "classicallit",
+            "European Literature": "eurolit",
+            "World Literature": "worldlit",
+            "Other Literature": "otherlit",
+            "American History": "amhist",
+            "Ancient History": "ancienthist",
+            "European History": "eurohist",
+            "World History": "worldhist",
+            "Other History": "otherhist",
+            "Biology": "bio",
+            "Chemistry": "chem",
+            "Physics": "phys",
+            "Other Science": "osci",
+            "Visual Fine Arts": "vfa",
+            "Auditory Fine Arts": "afa",
+            "Other Fine Arts": "ofa",
+            "Drama": "drama",
+            "Long Fiction": "longfiction",
+            "Poetry": "poetry",
+            "Short Fiction": "shortfiction",
+            "Misc Literature": "misclit",
+            "Math": "math",
+            "Astronomy": "astronomy",
+            "Computer Science": "cs",
+            "Earth Science": "earthscience",
+            "Engineering": "eng",
+            "Misc Science": "miscsci",
+            "Architecture": "architecture",
+            "Dance": "dance",
+            "Film": "film",
+            "Jazz": "jazz",
+            "Opera": "opera",
+            "Photography": "photography",
+            "Misc Arts": "miscarts",
+            "Anthropology": "anthropology",
+            "Economics": "economics",
+            "Linguistics": "linguistics",
+            "Psychology": "psych",
+            "Sociology": "sociology",
+            "Other Social Science": "otherss"
         }
-
-        catList = message.content.split()
+        catList= message.content
+        catList = catList.replace(',', '')
+        catList = catList.split();
         catList.remove('=ts')
         diffList = []
         newCatList = []
@@ -649,17 +846,17 @@ async def on_message(message):
 
         def get_key(val):
 
-            for key, value in subs.items():
+            for key, value in cats.items():
                 if val == value:
                     return key
 
             return "key doesn't exist"
-
         for i in catList:
-            if i in subs.values() and get_key(i) != "key doesn't exist":
+            if i in cats.values() and get_key(i) != "key doesn't exist":
                 catList[catList.index(i)] = get_key(i)
             else:
-                catList.remove(i)  # removes element that is not in subs, could return idk in futur
+                await message.channel.send("Enter Correct Categories")
+                return # removes element that is not in subs, could return idk in futur
 
         channel = message.channel
         buzzQ = []
@@ -669,17 +866,123 @@ async def on_message(message):
             player_lists[channel.id] = player_list
             skip_list[channel.id] = []
             end_list[channel.id] = []
+            clear_list[channel.id] = []
             await ts(catList, diffList, channel, active_channels[channel.id]);
         else:
             embed = discord.Embed(title='Session Active', color = 0xFF0000)
             await channel.send(embed = embed)
-    if message.content == '-help':
+
+
+
+    if message.content.startswith('=bonus'):
+        cats = {
+            "Literature": "lit",
+            "Science": "sci",
+            "History": "hist",
+            "Fine Arts": "fa",
+            "Religion": "religion",
+            "Mythology": "myth",
+            "Philosophy": "philo",
+            "Social Science": "ss",
+            "Current Events": "ce",
+            "Geography": "geo",
+            "Trash": "trash",
+            "American Literature": "amlit",
+            "British Literature": "britlit",
+            "Classical Literature": "classicallit",
+            "European Literature": "eurolit",
+            "World Literature": "worldlit",
+            "Other Literature": "otherlit",
+            "American History": "amhist",
+            "Ancient History": "ancienthist",
+            "European History": "eurohist",
+            "World History": "worldhist",
+            "Other History": "otherhist",
+            "Biology": "bio",
+            "Chemistry": "chem",
+            "Physics": "phys",
+            "Other Science": "osci",
+            "Visual Fine Arts": "vfa",
+            "Auditory Fine Arts": "afa",
+            "Other Fine Arts": "ofa",
+            "Drama": "drama",
+            "Long Fiction": "longfiction",
+            "Poetry": "poetry",
+            "Short Fiction": "shortfiction",
+            "Misc Literature": "misclit",
+            "Math": "math",
+            "Astronomy": "astronomy",
+            "Computer Science": "cs",
+            "Earth Science": "earthscience",
+            "Engineering": "eng",
+            "Misc Science": "miscsci",
+            "Architecture": "architecture",
+            "Dance": "dance",
+            "Film": "film",
+            "Jazz": "jazz",
+            "Opera": "opera",
+            "Photography": "photography",
+            "Misc Arts": "miscarts",
+            "Anthropology": "anthropology",
+            "Economics": "economics",
+            "Linguistics": "linguistics",
+            "Psychology": "psych",
+            "Sociology": "sociology",
+            "Other Social Science": "otherss"
+        }
+
+        catList = message.content
+        catList = catList.replace(',', '')
+        catList = catList.split();
+        catList.remove('=bonus')
+        diffList = []
+        newCatList = []
+        for i in catList:
+            if i.isdigit() and 10 > int(i) > 0:
+                diffList.append(i)
+            elif i.isdigit():
+                embed = discord.Embed(title="Enter a correct difficulty", color=0xFF0000)
+                await message.channel.send(embed=embed)
+                return
+            else:
+                newCatList.append(i)
+        catList = newCatList
+
+        def get_key(val):
+
+            for key, value in cats.items():
+                if val == value:
+                    return key
+
+            return "key doesn't exist"
+
+        for i in catList:
+            if i in cats.values() and get_key(i) != "key doesn't exist":
+                catList[catList.index(i)] = get_key(i)
+            else:
+                await message.channel.send("Enter Correct Categories")
+                return  # removes element that is not in subs, could return idk in futur
+
+        channel = message.channel
+        user = message.author
+        buzzQ = []
+        if (channel.id not in active_channels.keys()):
+            active_channels[channel.id] = buzzQ
+            skip_list[channel.id] = []
+            end_list[channel.id] = []
+            clear_list[channel.id] = []
+            await bonus(catList, diffList, channel, user)
+        else:
+            embed = discord.Embed(title='Session Active', color=0xFF0000)
+            await channel.send(embed=embed)
+
+    if message.content == '=help':
         embed = discord.Embed(title="SpeechQB Help", color=0x3776AB)
         embed.add_field(name="=ts",
                               value = "=ts [cats] [diffs]. i. e  =ts geo 2, this is a text based version",
                               inline=False)
-        embed.add_field(name="-play",
-                        value="-play [cats] [diffs]. i. e   -play geo 2 (must be in voice channel), this mode will use AI reader in voice channel to read you questions",
+        embed.add_field(name="=play",
+                        value="=play [cats] [diffs]. i. e   -play geo 2 (must be in voice channel), this mode will use AI reader in voice channel to read you questions",
                         inline=False)
         embed.add_field(name="How to buzz in",
                         value="To buzz in an answer type bz or buzz then type your answer within 20 seconds",
@@ -687,20 +990,38 @@ async def on_message(message):
         embed.add_field(name="How to Withdraw",
                         value="To withdraw after buzzing type wd within 20 seconds",
                         inline=False)
-        embed.add_field(name="-skip or -next", value="skips current question", inline=False)
-        embed.add_field(name="-end",
-                        value="Once in the game and you wish to end, type -end",
+        embed.add_field(name="=skip or =next", value="skips current question", inline=False)
+        embed.add_field(name="=end",
+                        value="Once in the game and you wish to end, type =end",
                         inline=False)
-        embed.add_field(name='-bonus',
-                        value="type -bonus [cats] [diffs] to play bonuses",
+        embed.add_field(name='=bonus',
+                        value="type =bonus [cats] [diffs] to play bonuses",
                         inline=False)
-        embed.add_field(name="-score",
+        embed.add_field(name="=score",
                         value="Gives the scores of every person who has buzzed in",
                         inline=False)
         embed.add_field(name="DM dogeking0 for any bugs",
-                        value="Version 0.3.0",
+                        value="Version 0.4.0",
                         inline=False)
         await message.channel.send(embed=embed)
+
+    if message.content == '-vikram':
+        embed = discord.Embed(title="Veeekram", color=0x3776AB)
+        embed.set_image(
+            url='https://cdn.discordapp.com/attachments/1029560549903700099/1166187556405252218/IMG_2491.jpg?ex=654993cc&is=65371ecc&hm=9b3f28fb13d33c5f52af344a0ab980c3684843f8207d477fa61d3eef5e4895f2&')
+        await message.channel.send(embed=embed)
+    if message.content == '-jackie':
+        await message.channel.send('Government Coup!!!!')
+    if message.content == '-akshath':
+        embed = discord.Embed(title="dyuude", color=0x3776AB)
+        embed.set_image(
+            url=(
+                'https://cdn.discordapp.com/attachments/1029560549903700099/1170171115574923264/image.png?ex=655811c6&is=65459cc6&hm=71eb7cbfc3f11a2a1e3b55a241ebe0d7f9e1aac891be95d5bb7550c36c6d76e2&'))
+        await message.channel.send(embed=embed)
+    if message.content == '-jason':
+        await message.channel.send('where were you during the taiping rebellion')
+    if message.content == '-varma':
+        await message.channel.send('I am adult medium 😠')
 
 
 client.run(TOKEN)
